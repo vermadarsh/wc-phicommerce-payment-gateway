@@ -153,6 +153,13 @@ class Wc_Phicommerce_Payment_Gateway {
 		$this->loader->add_action( 'admin_enqueue_scripts', $plugin_admin, 'wcpp_admin_enqueue_scripts_callback' );
 		$this->loader->add_filter( 'woocommerce_payment_gateways', $plugin_admin, 'wcpp_woocommerce_payment_gateways_callback' );
 		$this->loader->add_action( 'add_meta_boxes', $plugin_admin, 'wcpp_add_meta_boxes_callback' );
+		$this->loader->add_action( 'wp_ajax_get_transaction_status', $plugin_admin, 'wcpp_get_transaction_status_callback' );
+		$this->loader->add_filter( 'woocommerce_admin_order_actions', $plugin_admin, 'wcpp_woocommerce_admin_order_actions_callback', 10, 2 );
+		$this->loader->add_action( 'woocommerce_order_item_add_action_buttons', $plugin_admin, 'wcpp_woocommerce_order_item_add_action_buttons_callback' );
+		$this->loader->add_filter( 'woocommerce_admin_order_should_render_refunds', $plugin_admin, 'wcpp_woocommerce_admin_order_should_render_refunds_callback', 99, 3 );
+		$this->loader->add_action( 'wp_ajax_process_refund', $plugin_admin, 'wcpp_process_refund_callback' );
+		$this->loader->add_filter( 'manage_edit-shop_order_columns', $plugin_admin, 'wcpp_manage_shop_order_posts_columns_callback', 20 );
+		$this->loader->add_action( 'manage_shop_order_posts_custom_column', $plugin_admin, 'wcpp_manage_shop_order_posts_custom_column', 20, 2 );
 	}
 
 	/**
@@ -167,13 +174,12 @@ class Wc_Phicommerce_Payment_Gateway {
 		$plugin_public = new Wc_Phicommerce_Payment_Gateway_Public( $this->get_plugin_name(), $this->get_version() );
 
 		$this->loader->add_action( 'wp_enqueue_scripts', $plugin_public, 'wcpp_wp_enqueue_scripts_callback' );
-		$this->loader->add_action( 'wp_footer', $plugin_public, 'wcpp_wp_footer_callback' );
 		$this->loader->add_action( 'woocommerce_after_checkout_validation', $plugin_public, 'wcpp_woocommerce_after_checkout_validation_callback', 20, 2 );
 		$this->loader->add_action( 'woocommerce_checkout_update_order_meta', $plugin_public, 'wcpp_woocommerce_checkout_update_order_meta_callback' );
 		$this->loader->add_action( 'woocommerce_checkout_order_processed', $plugin_public, 'cf_woocommerce_checkout_order_processed_callback', 20, 2 );
 		$this->loader->add_action( 'wp_head', $plugin_public, 'wcpp_wp_head_callback' );
 		$this->loader->add_filter( 'woocommerce_custom_gateway_icon', $plugin_public, 'wcpp_woocommerce_custom_gateway_icon_callback' );
-		// $this->loader->add_action( 'woocommerce_after_order_notes', $plugin_public, 'wcpp_woocommerce_after_order_notes_callback' );
+		$this->loader->add_filter( 'woocommerce_thankyou_order_received_text', $plugin_public, 'wcpp_woocommerce_thankyou_order_received_text_callback', 99, 2 );
 	}
 
 	/**

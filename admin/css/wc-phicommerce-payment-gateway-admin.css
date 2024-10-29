@@ -1,3 +1,7 @@
 .admin-phicommerce-payment-details div {margin-bottom: 20px;}
 .admin-phicommerce-payment-details div span.click-to-copy {word-break: break-all;cursor: pointer;}
 .admin-phicommerce-payment-details div span.woocommerce-help-tip {margin: 0 2px 0 2px !important;}
+.non-clickable {pointer-events: none;opacity: 0.5;}
+.wc-action-button-wcpp-get-transaction-status:before {content: "\f130";display: inline-block;font-family: dashicons;font-size: 12px;color: #2271b1;font-weight: 500;position: absolute;right: 5px;top: 1px;}
+.payphi-refund-error {display: flex;color: red;width: 100%;}
+.payphi-refund-success {display: flex;color: green;width: 100%;}

@@ -86,16 +86,22 @@ if ( ! function_exists( 'woocommerce_phicommerce_payment_gateway_settings' ) ) {
 	 * @since 1.0.0
 	 */
 	function woocommerce_phicommerce_payment_gateway_settings() {
-		$settings                     = get_option( 'woocommerce_phicommerce_payments_settings' );
-		$is_sandbox                   = ( ! empty( $settings['is_sandbox'] ) && 'yes' === $settings['is_sandbox'] ) ? true : false; // Is sandbox mode on.
-		$process_sale_api_url         = ( ! empty( $settings['process_sale_api_url'] ) ) ? $settings['process_sale_api_url'] : '';
-		$process_sandbox_sale_api_url = ( ! empty( $settings['process_sandbox_sale_api_url'] ) ) ? $settings['process_sandbox_sale_api_url'] : '';
-		$merchant_information         = ( ! empty( $settings['merchant_information'] ) ) ? $settings['merchant_information'] : '';
-		$sandbox_merchant_information = ( ! empty( $settings['sandbox_merchant_information'] ) ) ? $settings['sandbox_merchant_information'] : '';
+		$settings                           = get_option( 'woocommerce_phicommerce_payments_settings' );
+		$is_sandbox                         = ( ! empty( $settings['is_sandbox'] ) && 'yes' === $settings['is_sandbox'] ) ? true : false; // Is sandbox mode on.
+		$process_sale_api_url               = ( ! empty( $settings['process_sale_api_url'] ) ) ? $settings['process_sale_api_url'] : '';
+		$process_sandbox_sale_api_url       = ( ! empty( $settings['process_sandbox_sale_api_url'] ) ) ? $settings['process_sandbox_sale_api_url'] : '';
+		$merchant_information               = ( ! empty( $settings['merchant_information'] ) ) ? $settings['merchant_information'] : '';
+		$sandbox_merchant_information       = ( ! empty( $settings['sandbox_merchant_information'] ) ) ? $settings['sandbox_merchant_information'] : '';
+		$transaction_status_api_url         = ( ! empty( $settings['check_transaction_status_url'] ) ) ? $settings['check_transaction_status_url'] : '';
+		$sandbox_transaction_status_api_url = ( ! empty( $settings['check_sandbox_transaction_status_url'] ) ) ? $settings['check_sandbox_transaction_status_url'] : '';
+		$transaction_refund_api_url         = ( ! empty( $settings['process_transaction_refund_url'] ) ) ? $settings['process_transaction_refund_url'] : '';
+		$sandbox_transaction_refund_api_url = ( ! empty( $settings['process_sandbox_transaction_refund_url'] ) ) ? $settings['process_sandbox_transaction_refund_url'] : '';
 
 		// Return the settings array.
 		return array(
 			'payphi_sale_api_url'         => ( $is_sandbox ) ? $process_sandbox_sale_api_url : $process_sale_api_url,
+			'payphi_sale_status_api_url'  => ( $is_sandbox ) ? $sandbox_transaction_status_api_url : $transaction_status_api_url,
+			'payphi_sale_refund_api_url'  => ( $is_sandbox ) ? $sandbox_transaction_refund_api_url : $transaction_refund_api_url,
 			'payphi_merchant_information' => ( $is_sandbox ) ? $sandbox_merchant_information : $merchant_information,
 		);
 	}

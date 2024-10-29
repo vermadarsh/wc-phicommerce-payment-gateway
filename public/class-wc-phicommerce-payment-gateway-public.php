@@ -80,23 +80,6 @@ class Wc_Phicommerce_Payment_Gateway_Public {
 	}
 
 	/**
-	 * 
-	 */
-	public function wcpp_wp_footer_callback() {
-		$include_custom_notifications = false; // Include the notifications file.
-
-		// If it's the checkout page.
-		if ( is_checkout() ) {
-			$include_custom_notifications = true;
-		}
-
-		// If the notitification file can be included.
-		if ( $include_custom_notifications ) {
-			include_once WCPP_PLUGIN_PATH . 'public/templates/notifications/notification.php';
-		}
-	}
-
-	/**
 	 * Fire the payment API now.
 	 *
 	 * @since 1.0.0
@@ -118,10 +101,30 @@ class Wc_Phicommerce_Payment_Gateway_Public {
 		}
 
 		// Check if the initial transaction request is already there.
-		$initial_transaction_request = WC()->session->get( 'wcpp_payphi_initial_transaction_request' );
+		$final_transaction_response_code = get_transient( 'wcpp_payphi_final_response_code' );
+
+		// If the last transaction failed, return to show the error.
+		if ( ! empty( $final_transaction_response_code ) && ! is_bool( $final_transaction_response_code ) ) {
+			// If there is any failure due to any reason.
+			if ( ! ( '000' === $final_transaction_response_code || '0000' === $final_transaction_response_code ) ) {
+				// Unset the session for the oayment captured in case the phicommerce payment is failed/canceled.
+				WC()->session->__unset( 'wcpp_payphi_initial_transaction_request' );
+
+				$payment_settings_error = sprintf( __( 'The last payment was canceled or failed. Please retry paying again for the order.', 'wc-phicommerce-payment-gateway' ), '<strong>', '</strong>' );
+				wc_add_notice( $payment_settings_error, 'error' );
+
+				// Delete the transients of the final transaction detail.
+				delete_transient( 'wcpp_payphi_final_response_code' );
+				delete_transient( 'wcpp_payphi_final_response_desc' );
+
+				// Return to reprocess the payment.
+				return;
+			}
+		}
 
 		// Return, if the initial transaction request is already done.
-		if ( ! empty( $initial_transaction_request ) && 'yes' === $initial_transaction_request ) {
+		$initial_transaction_request = WC()->session->get( 'wcpp_payphi_initial_transaction_request' );
+		if ( ! is_null( $initial_transaction_request ) && 'yes' === $initial_transaction_request ) {
 			wcpp_write_payment_log( 'NOTICE: Payment request returned to merchant.' ); // Write the log.
 			return;
 		}
@@ -259,7 +262,7 @@ class Wc_Phicommerce_Payment_Gateway_Public {
 		WC()->session->set( 'wcpp_payphi_transaction_payload', $payment_parameters );
 
 		wcpp_write_payment_log( '::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::' ); // Write the log.
-		wcpp_write_payment_log( 'NOTICE: New card transaction initiated..' ); // Write the log.
+		wcpp_write_payment_log( 'NOTICE: New PayPhi transaction initiated..' ); // Write the log.
 		wcpp_write_payment_log( "NOTICE: Payload: {$payment_parameters}" ); // Write the log.
 
 		// Process the API now.
@@ -356,10 +359,7 @@ class Wc_Phicommerce_Payment_Gateway_Public {
 		update_post_meta( $order_id, 'phicommerce-payment-transaction-api-final-response-code', $final_api_response_code );
 		update_post_meta( $order_id, 'phicommerce-payment-transaction-api-final-response-desc', $final_api_response_desc );
 		update_post_meta( $order_id, 'checkout-merchant-id', $checkout_merchant_id );
-
-		// Get rid of the transients.
-		delete_transient( 'wcpp_payphi_final_response_code' );
-		delete_transient( 'wcpp_payphi_final_response_desc' );
+		wcpp_write_payment_log( 'NOTICE: Order meta updated with relevant payphi details.' ); // Log.
 
 		// Update the order status.
 		if( '000'== $final_api_response_code || '0000'== $final_api_response_code ) {
@@ -367,6 +367,8 @@ class Wc_Phicommerce_Payment_Gateway_Public {
 		} else {
 			$wc_order->update_status( 'wc-pending' ); // If the payment failed.
 		}
+
+		wcpp_write_payment_log( 'NOTICE: Session closed, order successfully placed.' ); // Log.
 	}
 
 	/**
@@ -377,12 +379,14 @@ class Wc_Phicommerce_Payment_Gateway_Public {
 	 * @since 1.0.0
 	 */
 	public function cf_woocommerce_checkout_order_processed_callback( $order_id, $posted_data ) {
-		// Unset the custom session variables.
+		// Unset the transients & custom session variables.
 		WC()->session->__unset( 'wcpp_payphi_initial_transaction_request' );
 		WC()->session->__unset( 'wcpp_payphi_transaction_ctx' );
 		WC()->session->__unset( 'wcpp_payphi_merchant_transaction_no' );
 		WC()->session->__unset( 'wcpp_payphi_transaction_payload' );
 		WC()->session->__unset( 'wcpp_payphi_transaction_api_response' );
+		delete_transient( 'wcpp_payphi_final_response_code' );
+		delete_transient( 'wcpp_payphi_final_response_desc' );
 	}
 
 	/**
@@ -401,6 +405,7 @@ class Wc_Phicommerce_Payment_Gateway_Public {
 				// Response from PayPhi.
 				$payphi_response_code = filter_input( INPUT_POST, 'responseCode', FILTER_SANITIZE_STRING );
 				$payphi_response_desc = filter_input( INPUT_POST, 'respDescription', FILTER_SANITIZE_STRING );
+				$payphi_response      = wp_json_encode( $_POST );
 
 				/**
 				 * Set this response in the transient.
@@ -410,19 +415,20 @@ class Wc_Phicommerce_Payment_Gateway_Public {
 				set_transient( 'wcpp_payphi_final_response_desc', $payphi_response_desc, DAY_IN_SECONDS );
 
 				// Write the log.
-				wcpp_write_payment_log( "NOTICE: Final response code from PayPhi: {$payphi_response_code}" );
-				wcpp_write_payment_log( "NOTICE: Final response message from PayPhi: {$payphi_response_desc}" );
+				wcpp_write_payment_log( 'NOTICE: Successful return to the merchant store.' );
+				wcpp_write_payment_log( "NOTICE: PayPhi response: {$payphi_response}" );
+				wcpp_write_payment_log( 'NOTICE: Heading to place the order.' );
 
 				// Set the redirection.
 				$redirect_to = wc_get_checkout_url() . '?place_order=1';
 			}
-		}
 
-		// If the redirect is available.
-		if ( ! empty( $redirect_to ) ) {
-			?>
-			<script type="text/javascript">window.location.href='<?php echo $redirect_to; ?>';</script>
-			<?php
+			// If the redirect is available.
+			if ( ! empty( $redirect_to ) ) {
+				?>
+				<script type="text/javascript">window.location.href='<?php echo $redirect_to; ?>';</script>
+				<?php
+			}
 		}
 	}
 
@@ -437,33 +443,28 @@ class Wc_Phicommerce_Payment_Gateway_Public {
 	}
 
 	/**
-	 * Add custom field after the notes field.
+	 * Modify the order received text.
 	 *
-	 * @param object $checkout WooCommerce checkout object.
+	 * @param string $order_received_text WooCommerce order received text.
+	 * @param object $wc_order WooCommerce order object.
+	 * @return string
 	 * @since 1.0.0
 	 */
-	// public function wcpp_woocommerce_after_order_notes_callback( $checkout ) {
-	// 	echo '<div id="merchant_id_checkout_field"><h3>' . __( 'Additional Information', 'wc-phicommerce-payment-gateway' ) . '</h3>';
-	// 	woocommerce_form_field(
-	// 		'checkout_merchant_id',
-	// 		array(
-	// 			'type'        => 'text',
-	// 			'class'       => array( 'merchant-id-checkout-field form-row-wide' ),
-	// 			'label'       => __( 'Merchant ID', 'wc-phicommerce-payment-gateway' ),
-	// 			'placeholder' => __( 'Merchant ID', 'wc-phicommerce-payment-gateway' ),
-	// 			'required'    => false,
-	// 		),
-	// 		$checkout->get_value( 'checkout_merchant_id' )
-	// 	);
-	// 	woocommerce_form_field(
-	// 		'checkout_add_param_1',
-	// 		array(
-	// 			'type'        => 'hidden',
-	// 			'class'       => array( 'add-param1-checkout-field form-row-wide' ),
-	// 			'required'    => false,
-	// 		),
-	// 		$checkout->get_value( 'checkout_add_param_1' )
-	// 	);
-	// 	echo '</div>';
-	// }
+	public function wcpp_woocommerce_thankyou_order_received_text_callback( $order_received_text, $wc_order ) {
+		// Return, if the order is null.
+		if ( is_null( $wc_order ) ) {
+			return;
+		}
+
+		$wc_order_status         = $wc_order->get_status(); // Get the order status.
+		$wc_order_payment_method = $wc_order->get_payment_method(); // Get the payment method.
+		$wc_order_payment_link   = $wc_order->get_checkout_payment_url(); // Get the order payment link.
+
+		// If the order is in pending state.
+		if ( 'pending' === $wc_order_status && 'phicommerce_payments' === $wc_order_payment_method ) {
+			$order_received_text = sprintf( __( 'Thank you. Your order has been received but the payment is not completed. Click %1$shere%2$s to complete the payment.', 'wc-phicommerce-payment-gateway' ), '<a target="_blank" title="" href="' . $wc_order_payment_link . '">', '</a>' );
+		}
+
+		return $order_received_text;
+	}
 }
